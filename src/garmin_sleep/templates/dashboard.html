@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sommeil — analyse Garmin</title>
+<style>
+  :root {
+    --bg: #0f1220; --card: #1a1f35; --card2: #212a4a;
+    --text: #e8eaf2; --muted: #9aa3c0; --accent: #7aa2ff;
+    --deep: #3457d5; --light: #7aa2ff; --rem: #b07aff; --awake: #ffb37a;
+    --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 32px 0 12px; color: var(--accent); }
+  .sub { color: var(--muted); margin-bottom: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border-radius: 12px; padding: 16px; }
+  .card .v { font-size: 1.6rem; font-weight: 700; }
+  .card .l { color: var(--muted); font-size: .82rem; margin-top: 2px; }
+  .chart-box { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .chart-box canvas { max-height: 320px; }
+  .tip { background: var(--card); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; border-left: 4px solid var(--accent); }
+  .tip.p1 { border-left-color: var(--bad); }
+  .tip.p2 { border-left-color: var(--warn); }
+  .tip h3 { margin: 0 0 6px; font-size: 1.02rem; }
+  .tip p { margin: 0 0 8px; color: var(--text); font-size: .93rem; }
+  .tip .ev { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tip .ev span { background: var(--card2); border-radius: 6px; padding: 3px 10px; font-size: .82rem; color: var(--muted); }
+  .tip .ev b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2a3352; }
+  th { color: var(--muted); font-weight: 600; }
+  .r-pos { color: var(--good); } .r-neg { color: var(--bad); } .r-na { color: var(--muted); }
+  .r-warn { color: var(--warn); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  footer { color: var(--muted); font-size: .8rem; margin-top: 32px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌙 Analyse de votre sommeil</h1>
+  <div class="sub" id="period"></div>
+
+  <div class="cards" id="cards"></div>
+
+  <h2>Conseils personnalisés</h2>
+  <div id="tips"></div>
+
+  <h2>Durée et stades de sommeil</h2>
+  <div class="chart-box"><canvas id="stagesChart"></canvas></div>
+
+  <h2>Score de sommeil</h2>
+  <div class="chart-box"><canvas id="scoreChart"></canvas></div>
+
+  <div id="spo2Section" style="display:none">
+    <h2>Oxymétrie nocturne (SpO2)</h2>
+    <div class="chart-box"><canvas id="spo2Chart"></canvas></div>
+    <div class="chart-box" style="overflow-x:auto">
+      <table id="spo2Table">
+        <thead><tr><th>Mois</th><th>Nuits mesurées</th><th>SpO2 moyenne</th><th>SpO2 min (médiane)</th><th>Nuits &lt; 85 %</th><th>Nuits &lt; 80 %</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p style="color:var(--muted);font-size:.82rem;margin:10px 0 0">
+        Le capteur au poignet est imprécis (une valeur basse isolée peut être un artefact) :
+        c'est la <b>récurrence</b> et la <b>tendance mensuelle</b> qui sont significatives.
+        Si vous êtes traité pour une apnée du sommeil (PPC, orthèse d'avancée mandibulaire),
+        une dégradation durable justifie un contrôle du réglage avec votre spécialiste.
+      </p>
+    </div>
+  </div>
+
+  <h2>Heure de coucher</h2>
+  <div class="chart-box"><canvas id="bedtimeChart"></canvas></div>
+
+  <div class="grid2">
+    <div>
+      <h2>Profil par jour de la semaine</h2>
+      <div class="chart-box"><canvas id="weekdayChart"></canvas></div>
+    </div>
+    <div>
+      <h2>Corrélations (journée → nuit suivante)</h2>
+      <div class="chart-box" style="overflow-x:auto">
+        <table id="corrTable">
+          <thead><tr><th>Variable</th><th>Effet sur</th><th>r</th><th>n</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>Généré localement par garmin-sleep — aucune donnée n'a quitté cette machine.
+  Fuseau : <span id="tz"></span>. r = corrélation de Pearson ; |r| &lt; 0,2 : effet faible ou nul.</footer>
+</div>
+
+<script>/*{{CHARTJS}}*/</script>
+<script>
+const DATA = "{{PAYLOAD}}";
+
+const fmtH = h => { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return hh + " h " + String(mm).padStart(2, "0"); };
+
+/* ---- période + cartes ---- */
+document.getElementById("period").textContent =
+  DATA.period.n_nights + " nuits analysées, du " + DATA.period.start + " au " + DATA.period.end;
+document.getElementById("tz").textContent = DATA.tz;
+
+const S = DATA.summary;
+const cards = [
+  ["Score moyen", S.avg_score !== null ? S.avg_score + " / 100" : "—"],
+  ["Durée moyenne (30 j)", S.avg_total_h_30d !== null ? fmtH(S.avg_total_h_30d) : "—"],
+  ["Coucher médian", S.median_bedtime ?? "—"],
+  ["Régularité du coucher", S.bedtime_std_min !== null ? "± " + S.bedtime_std_min + " min" : "—"],
+  ["Jetlag social", S.social_jetlag_min !== null ? S.social_jetlag_min + " min" : "—"],
+  ["Profond / REM", (S.avg_deep_pct ?? "—") + " % / " + (S.avg_rem_pct ?? "—") + " %"],
+];
+if (S.avg_spo2 !== null) {
+  cards.push(["SpO2 moyenne (nuit)", S.avg_spo2 + " %"]);
+  cards.push(["Nuits SpO2 < 85 %", S.low_spo2_share + " %"]);
+}
+document.getElementById("cards").innerHTML =
+  cards.map(([l, v]) => `<div class="card"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+/* ---- conseils ---- */
+document.getElementById("tips").innerHTML = DATA.tips.length
+  ? DATA.tips.map(t => `
+    <div class="tip p${t.priority}">
+      <h3>${t.title}</h3>
+      <p>${t.body}</p>
+      <div class="ev">${Object.entries(t.evidence).map(([k, v]) => `<span>${k} : <b>${v}</b></span>`).join("")}</div>
+    </div>`).join("")
+  : '<div class="tip"><h3>Rien à signaler 🎉</h3><p>Aucune règle d\'alerte ne s\'est déclenchée sur cette période.</p></div>';
+
+/* ---- Chart.js réglages communs ---- */
+Chart.defaults.color = "#9aa3c0";
+Chart.defaults.borderColor = "#2a3352";
+Chart.defaults.font.family = "system-ui, sans-serif";
+
+const labels = DATA.nights.map(n => n.date);
+const trendMap = pairs => { const m = new Map(pairs); return labels.map(d => m.get(d) ?? null); };
+
+/* ---- stades empilés + tendances ---- */
+new Chart(document.getElementById("stagesChart"), {
+  data: {
+    labels,
+    datasets: [
+      { type: "bar", label: "Profond", data: DATA.nights.map(n => n.deep_h), backgroundColor: "#3457d5", stack: "s" },
+      { type: "bar", label: "Léger", data: DATA.nights.map(n => n.light_h), backgroundColor: "#7aa2ff", stack: "s" },
+      { type: "bar", label: "REM", data: DATA.nights.map(n => n.rem_h), backgroundColor: "#b07aff", stack: "s" },
+      { type: "bar", label: "Éveillé", data: DATA.nights.map(n => n.awake_h), backgroundColor: "#ffb37a", stack: "s" },
+      { type: "line", label: "Moyenne 7 j", data: trendMap(DATA.trends.total_h_7d), borderColor: "#4ade80", pointRadius: 0, borderWidth: 2, tension: .3 },
+      { type: "line", label: "Moyenne 30 j", data: trendMap(DATA.trends.total_h_30d), borderColor: "#fbbf24", pointRadius: 0, borderWidth: 2, borderDash: [6, 4], tension: .3 },
+    ],
+  },
+  options: {
+    responsive: true,
+    scales: { x: { stacked: true, ticks: { maxTicksLimit: 12 } }, y: { stacked: true, title: { display: true, text: "heures" } } },
+    plugins: { tooltip: { mode: "index" } },
+  },
+});
+
+/* ---- score ---- */
+new Chart(document.getElementById("scoreChart"), {
+  data: {
+    labels,
+    datasets: [
+      { type: "line", label: "Score", data: DATA.nights.map(n => n.score), showLine: false, backgroundColor: "#7aa2ff88", borderColor: "#7aa2ff88", pointRadius: 3 },
+      { type: "line", label: "Moyenne 7 j", data: trendMap(DATA.trends.score_7d), borderColor: "#4ade80", pointRadius: 0, borderWidth: 2, tension: .3 },
+      { type: "line", label: "Moyenne 30 j", data: trendMap(DATA.trends.score_30d), borderColor: "#fbbf24", pointRadius: 0, borderWidth: 2, borderDash: [6, 4], tension: .3 },
+    ],
+  },
+  options: {
+    responsive: true,
+    scales: { x: { ticks: { maxTicksLimit: 12 } }, y: { min: 0, max: 100, title: { display: true, text: "score /100" } } },
+  },
+});
+
+/* ---- SpO2 (affiché seulement si des mesures existent) ---- */
+if (DATA.nights.some(n => n.spo2_low !== null || n.spo2_avg !== null)) {
+  document.getElementById("spo2Section").style.display = "";
+  const lowColor = v => v === null ? "transparent" : v < 80 ? "#f87171" : v < 85 ? "#fbbf24" : "#7aa2ff";
+  new Chart(document.getElementById("spo2Chart"), {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: "line", label: "SpO2 min", showLine: false, pointRadius: 3,
+          data: DATA.nights.map(n => n.spo2_low),
+          backgroundColor: DATA.nights.map(n => lowColor(n.spo2_low)),
+          borderColor: "transparent",
+        },
+        {
+          type: "line", label: "SpO2 moyenne", pointRadius: 0, borderWidth: 2, tension: .3, spanGaps: true,
+          data: DATA.nights.map(n => n.spo2_avg), borderColor: "#4ade80",
+        },
+        {
+          type: "line", label: "Seuil 85 %", pointRadius: 0, borderWidth: 1, borderDash: [4, 4],
+          data: labels.map(() => 85), borderColor: "#fbbf24",
+        },
+        {
+          type: "line", label: "Seuil 80 %", pointRadius: 0, borderWidth: 1, borderDash: [4, 4],
+          data: labels.map(() => 80), borderColor: "#f87171",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { maxTicksLimit: 12 } },
+        y: { min: 70, max: 100, title: { display: true, text: "SpO2 %" } },
+      },
+      plugins: { tooltip: { mode: "index", intersect: false } },
+    },
+  });
+  // niveaux : neutre (occasionnel) / orange (fréquent) / rouge (majoritaire ou profond)
+  const grade = (v, warnAt, badAt) => v === null ? "r-na" : v >= badAt ? "r-neg" : v >= warnAt ? "r-warn" : "";
+  document.querySelector("#spo2Table tbody").innerHTML = DATA.spo2.monthly.map(m => {
+    const pct = v => v === null ? "—" : v + " %";
+    return `<tr><td>${m.month}</td><td>${m.n}</td><td>${m.avg ?? "—"} %</td><td>${m.median_low ?? "—"} %</td>`
+      + `<td class="${grade(m.below_85, 25, 50)}">${pct(m.below_85)}</td>`
+      + `<td class="${grade(m.below_80, 5, 15)}">${pct(m.below_80)}</td></tr>`;
+  }).join("");
+  document.querySelector("#spo2Table").insertAdjacentHTML("afterend",
+    `<p style="color:var(--muted);font-size:.8rem;margin:8px 0 0">
+      Code couleur — nuits &lt; 85 % : <span class="r-warn">orange ≥ 25 %</span>,
+      <span class="r-neg">rouge ≥ 50 %</span> des nuits ·
+      nuits &lt; 80 % : <span class="r-warn">orange ≥ 5 %</span>,
+      <span class="r-neg">rouge ≥ 15 %</span> des nuits.</p>`);
+}
+
+/* ---- heure de coucher (axe minutes depuis 18:00, étiquettes en heure réelle) ---- */
+const offToClock = m => { const t = (m + 18 * 60) % 1440; return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(Math.round(t % 60)).padStart(2, "0"); };
+new Chart(document.getElementById("bedtimeChart"), {
+  type: "scatter",
+  data: {
+    labels,
+    datasets: [{
+      label: "Coucher",
+      data: DATA.nights.map(n => n.bedtime_offset_min),
+      backgroundColor: "#b07aff",
+      pointRadius: 3,
+    }],
+  },
+  options: {
+    responsive: true,
+    scales: {
+      x: { type: "category", ticks: { maxTicksLimit: 12 } },
+      y: { reverse: true, title: { display: true, text: "heure locale" }, ticks: { callback: v => offToClock(v) } },
+    },
+    plugins: { tooltip: { callbacks: { label: ctx => DATA.nights[ctx.dataIndex].date + " — coucher à " + DATA.nights[ctx.dataIndex].bedtime_clock } } },
+  },
+});
+
+/* ---- profil hebdomadaire ---- */
+new Chart(document.getElementById("weekdayChart"), {
+  data: {
+    labels: DATA.weekday.map(w => w.label),
+    datasets: [
+      { type: "bar", label: "Durée (h)", data: DATA.weekday.map(w => w.avg_total_h), backgroundColor: "#3457d5", yAxisID: "y" },
+      { type: "line", label: "Score", data: DATA.weekday.map(w => w.avg_score), borderColor: "#4ade80", yAxisID: "y2" },
+    ],
+  },
+  options: {
+    responsive: true,
+    scales: {
+      y: { title: { display: true, text: "heures" } },
+      y2: { position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: "score" } },
+    },
+  },
+});
+
+/* ---- corrélations ---- */
+document.querySelector("#corrTable tbody").innerHTML = DATA.correlations.map(c => {
+  const cls = c.r === null ? "r-na" : c.r > 0.2 ? "r-pos" : c.r < -0.2 ? "r-neg" : "r-na";
+  const val = c.r === null ? "n/a" : c.r.toFixed(2);
+  return `<tr><td>${c.label}</td><td>${c.target}</td><td class="${cls}">${val}</td><td>${c.n}</td></tr>`;
+}).join("");
+</script>
+</body>
+</html>
