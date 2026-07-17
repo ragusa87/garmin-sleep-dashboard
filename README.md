@@ -6,7 +6,21 @@
 Tableau de bord local d'analyse du sommeil à partir d'un export de données Garmin (GDPR).
 Tout se passe sur votre machine : aucune donnée n'est envoyée nulle part.
 
-## Utilisation
+## Démarrage rapide (Justfile)
+
+Depuis le dossier `sleep-app`, avec [just](https://github.com/casey/just) :
+
+```bash
+just run                          # dernier export *.zip trouvé ici ou dans le dossier parent, build à jour (--refresh)
+just run-zip /chemin/export.zip   # un export précis
+just run --days 30 --port 8080    # les options CLI passent à travers
+just test                         # suite pytest
+```
+
+`just run` utilise `uvx --refresh`, donc les modifications locales du code sont
+toujours prises en compte, sans bump de version.
+
+## Utilisation sans just
 
 ```bash
 uvx --from /chemin/vers/sleep-app garmin-sleep /chemin/vers/export-garmin.zip
