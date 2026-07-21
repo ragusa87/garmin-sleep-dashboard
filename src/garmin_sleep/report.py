@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_mod
 import json
 from importlib import resources
 
@@ -152,10 +153,20 @@ def build_payload(analysis: Analysis, tips: list[Tip]) -> dict:
     }
 
 
-def build_html(payload: dict) -> str:
+def build_html(payload: dict, setup_url: str | None = None) -> str:
+    """HTML autonome ; setup_url ajoute un lien de configuration (mode Django)."""
     pkg = resources.files("garmin_sleep")
     template = (pkg / "templates" / "dashboard.html").read_text(encoding="utf-8")
     chartjs = (pkg / "static" / "chart.umd.js").read_text(encoding="utf-8")
+    nav = (
+        f'<nav class="setup-link"><a href="{html_mod.escape(setup_url)}">⚙️ Configuration</a></nav>'
+        if setup_url
+        else ""
+    )
     # </script> dans les chaînes JSON casserait le tag <script> englobant
     payload_js = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
-    return template.replace("/*{{CHARTJS}}*/", chartjs).replace('"{{PAYLOAD}}"', payload_js)
+    return (
+        template.replace("/*{{CHARTJS}}*/", chartjs)
+        .replace('"{{PAYLOAD}}"', payload_js)
+        .replace("<!--{{NAV}}-->", nav)
+    )

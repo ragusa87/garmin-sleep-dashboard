@@ -7,20 +7,24 @@ default:
 test:
     uv run pytest -q
 
-# Tableau de bord avec le dernier export *.zip trouvé ici (ou dans le dossier parent)
-run *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    shopt -s nullglob
-    candidates=(./*.zip ../*.zip)
-    if [ ${#candidates[@]} -eq 0 ]; then
-        echo "Aucun export *.zip trouvé dans $(realpath .) ni $(realpath ..)" >&2
-        exit 1
-    fi
-    zip=$(ls -t "${candidates[@]}" | head -1)
-    echo "Export utilisé : ${zip}"
-    uvx --refresh --from . garmin-sleep "${zip}" {{args}}
+# Appliquer les migrations (crée db.sqlite3 au premier lancement)
+migrate:
+    uv run python manage.py migrate
 
-# Tableau de bord avec un zip précis : just run-zip /chemin/export.zip [--days 30 …]
-run-zip zip *args:
-    uvx --refresh --from . garmin-sleep "{{zip}}" {{args}}
+# Tableau de bord Django : http://127.0.0.1:8765/
+run: migrate
+    uv run python manage.py runserver 127.0.0.1:8765
+
+# Importer un export Garmin GDPR dans la base : just import-zip /chemin/export.zip
+import-zip zip: migrate
+    uv run python manage.py import_zip "{{zip}}"
+
+# Connexion interactive Garmin Connect : identifiants jamais écrits sur disque,
+# seuls les jetons OAuth sont stockés dans ./.garmin_tokens (0600)
+login:
+    uv run python manage.py garmin_login
+
+# Synchroniser les N derniers jours depuis l'API Garmin Connect (défaut : 30)
+# Prérequis : `just login` (recommandé) ou .env.local — voir la page /setup/
+sync days="30": migrate
+    uv run python manage.py sync_garmin --days {{days}}
