@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .env import load_env_file
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10,10 +12,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Secrets locaux (identifiants Garmin, …) — jamais commité, voir la page /setup/
 load_env_file(BASE_DIR / ".env.local")
 
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY", "dev-only-insecure-key-application-locale"
-)
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+
+# Clé de dev tolérée uniquement avec DEBUG : hors debug, une clé prévisible
+# affaiblirait la signature des cookies/sessions.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY est requis quand DJANGO_DEBUG=0"
+        )
+    SECRET_KEY = "dev-only-insecure-key-application-locale"
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 INSTALLED_APPS = [

@@ -28,6 +28,9 @@ def _build(request) -> dict | None:
         days_limit = int(request.GET["days"])
     except (KeyError, ValueError):
         days_limit = None
+    else:
+        if days_limit < 1:  # ?days=0 ou négatif → toutes les nuits
+            days_limit = None
 
     export = load_export_from_db()
     if not export.nights:

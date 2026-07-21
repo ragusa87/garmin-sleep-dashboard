@@ -24,5 +24,5 @@ packages = ["src/garmin_sleep"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "tests"]
 DJANGO_SETTINGS_MODULE = "config.settings"

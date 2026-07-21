@@ -60,6 +60,17 @@ def test_dashboard_renders_selfcontained_html(client):
 
 
 @pytest.mark.django_db
+def test_dashboard_ignores_invalid_days_param(client):
+    store.upsert_nights([make_night("2026-07-17"), make_night("2026-07-18")], source="api")
+    store.upsert_days([make_day("2026-07-17"), make_day("2026-07-18")], source="api")
+
+    for days in ("-1", "0", "abc"):
+        resp = client.get("/", {"days": days})
+        assert resp.status_code == 200, f"days={days}"
+        assert "2026-07-17" in resp.content.decode()  # limite ignorée → tout l'historique
+
+
+@pytest.mark.django_db
 def test_payload_json(client):
     store.upsert_nights([make_night()], source="api")
     resp = client.get("/api/payload.json")
