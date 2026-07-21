@@ -1,15 +1,19 @@
 [project]
 name = "garmin-sleep"
-version = "0.2.1"
-description = "Tableau de bord local d'analyse du sommeil à partir d'un export Garmin (GDPR)"
+version = "0.3.0"
+description = "Tableau de bord local d'analyse du sommeil à partir d'un export Garmin (GDPR) ou de l'API Garmin Connect"
 requires-python = ">=3.11"
-dependencies = ["tzdata"]
+dependencies = [
+    "tzdata",
+    "django>=5.1",
+    "garminconnect>=0.3",
+]
 
 [project.scripts]
 garmin-sleep = "garmin_sleep.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-django>=4.9"]
 
 [build-system]
 requires = ["hatchling"]
@@ -20,3 +24,5 @@ packages = ["src/garmin_sleep"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+DJANGO_SETTINGS_MODULE = "config.settings"

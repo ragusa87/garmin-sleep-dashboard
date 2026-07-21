@@ -1,3 +1,8 @@
 *.zip
 *.pyc
 **/__pycache__/**
+db.sqlite3
+.env.local
+.garmin_tokens/
+.venv/
+.pytest_cache/

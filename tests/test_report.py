@@ -86,3 +86,12 @@ def test_payload_spo2_section(make_export_zip):
     assert month["n"] == 20
     assert month["below_85"] == 0
     json.dumps(payload["spo2"])
+
+
+def test_html_setup_link_optional(make_export_zip):
+    payload = _full_pipeline(make_export_zip)
+    with_link = build_html(payload, setup_url="/setup/")
+    assert '<a href="/setup/">' in with_link
+    without = build_html(payload)
+    assert "setup" not in without.replace("setup-link", "")  # pas de lien en mode CLI
+    assert "<!--{{NAV}}-->" not in with_link

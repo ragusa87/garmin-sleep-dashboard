@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration — analyse Garmin</title>
+<style>
+  :root {
+    --bg: #0f1220; --card: #1a1f35; --text: #e8eaf2; --muted: #9aa3c0;
+    --accent: #7aa2ff; --ok: #4caf7d; --warn: #e0a33b;
+  }
+  body { margin: 0; padding: 2rem 1rem; background: var(--bg); color: var(--text);
+         font: 16px/1.6 system-ui, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; }
+  section { background: var(--card); border-radius: 12px; padding: 1rem 1.5rem;
+            margin: 1rem 0; }
+  code, pre { background: #0b0e1a; border-radius: 6px; padding: 0.15em 0.4em; }
+  pre { padding: 0.8em 1em; overflow-x: auto; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  a { color: var(--accent); }
+  p.muted, li.muted { color: var(--muted); }
+  .badge { font-size: .8rem; border-radius: 6px; padding: .1em .5em; margin-left: .4em; }
+  .badge.reco { background: #1d3a2a; color: var(--ok); }
+  .badge.avoid { background: #3a2d1d; color: var(--warn); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Configuration</h1>
+
+  <section>
+    <h2>État</h2>
+    <ul>
+      <li>Jetons de session Garmin :
+        {% if has_tokens %}<strong class="ok">présents</strong> (<code>{{ tokenstore }}</code>)
+        {% else %}<strong class="warn">absents</strong>{% endif %}</li>
+      <li>Identifiants dans <code>.env.local</code> :
+        {% if has_credentials %}<strong class="warn">présents</strong> — envisager
+          la connexion interactive ci-dessous et supprimer le mot de passe du fichier
+        {% else %}<strong class="ok">absents</strong> (recommandé){% endif %}</li>
+      <li>Nuits en base : <strong>{{ n_nights }}</strong>
+        {% if n_nights %}— <a href="{% url 'sleep:dashboard' %}">voir le tableau de bord</a>{% endif %}</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Connexion interactive <span class="badge reco">recommandé</span></h2>
+    <pre>just login</pre>
+    <p>L'e-mail et le mot de passe sont demandés au clavier (saisie masquée,
+       MFA supporté) et <strong>ne sont jamais écrits sur disque</strong>.
+       Seuls des jetons de session OAuth sont conservés, dans
+       <code>{{ tokenstore }}</code> (permissions <code>0600</code>, dans le
+       dossier du projet). Ensuite :</p>
+    <pre>just sync        # 30 derniers jours
+just sync 90     # 90 derniers jours</pre>
+  </section>
+
+  <section>
+    <h2>Alternative : <code>.env.local</code> <span class="badge avoid">à éviter pour le mot de passe</span></h2>
+    <p>Pour un usage non interactif (cron, conteneur), créer un fichier
+       <code>.env.local</code> à la racine du projet (jamais commité) :</p>
+    <pre>GARMIN_EMAIL=vous@example.com
+GARMIN_PASSWORD=votre-mot-de-passe</pre>
+    <p class="muted">Le mot de passe est alors en clair sur disque — préférer la
+       connexion interactive puis monter le dossier de jetons. Redémarrer le
+       serveur après création du fichier.</p>
+  </section>
+
+  <section>
+    <h2>Pourquoi pas une clé API ?</h2>
+    <p>Garmin ne propose <strong>pas de clé API personnelle</strong> : son
+       <a href="https://developer.garmin.com/gc-developer-program/overview/" rel="noopener noreferrer">API officielle (Health API)</a>
+       est réservée aux partenaires commerciaux approuvés. Cette application
+       utilise donc le même flux de connexion que l'application mobile Garmin
+       Connect, et n'en conserve que les jetons de session.</p>
+    <ul class="muted">
+      <li>Activer la <a href="https://www.garmin.com/fr-FR/account/" rel="noopener noreferrer">MFA sur votre compte Garmin</a> — supportée au login.</li>
+      <li>Pour révoquer les jetons : changer le mot de passe du compte Garmin,
+          ou supprimer le dossier <code>{{ tokenstore }}</code>.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Sans compte : export GDPR</h2>
+    <p>Demander un export sur
+       <a href="https://www.garmin.com/fr-FR/account/datamanagement/exportdata/" rel="noopener noreferrer">garmin.com</a>,
+       télécharger le zip reçu par e-mail, puis :</p>
+    <pre>just import-zip /chemin/export.zip</pre>
+  </section>
+</main>
+</body>
+</html>

@@ -43,10 +43,14 @@
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
   footer { color: var(--muted); font-size: .8rem; margin-top: 32px; }
+  .setup-link { float: right; font-size: .9rem; margin-top: 6px; }
+  .setup-link a { color: var(--muted); text-decoration: none; }
+  .setup-link a:hover { color: var(--text); }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!--{{NAV}}-->
   <h1>🌙 Analyse de votre sommeil</h1>
   <div class="sub" id="period"></div>
 
